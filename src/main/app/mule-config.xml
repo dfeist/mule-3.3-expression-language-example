@@ -1,0 +1,112 @@
+="http://www.mulesoft.org/schema/mule/core" xmlns:test="http://www.mulesoft.org/schema/mule/test"
+    xmlns:file="http://www.mulesoft.org/schema/mule/file" xmlns:mulexml="http://www.mulesoft.org/schema/mule/xml"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+                          http://www.mulesoft.org/schema/mule/test http://www.mulesoft.org/schema/mule/test/3.3/mule-test.xsd
+                          http://www.mulesoft.org/schema/mule/xml http://www.mulesoft.org/schema/mule/xml/3.3/mule-xml.xsd
+                          http://www.mulesoft.org/schema/mule/file http://www.mulesoft.org/schema/mule/file/3.3/mule-file.xsd">
+
+
+    <configuration>
+        <expression-language>
+            <import name="sys" class="java.lang.System" />
+            <alias name="i" expression="message.inboundProperties" />
+            <!--  <global-functions file="shared-functions.mel">  -->
+            <global-functions>
+                def now(){
+                    dateFormat = new java.text.SimpleDateFormat("HH:mm:ss dd/MM/yyyy");
+                    dateFormat.format(new Date());
+                }
+                def addTax(d){
+                    d * 1.2
+                }
+                def randomBoolean(){
+                    r = new java.util.Random();
+                    r.nextBoolean()
+                }
+                def randomDiscount(){
+                    r = new java.util.Random();
+                    r.nextInt(20)/100
+                }
+                def formatPrice(price){
+                    df = java.text.NumberFormat.getCurrencyInstance();
+                    df.format((double)price)
+                }
+            </global-functions>
+        </expression-language>
+    </configuration>
+
+
+    <flow name="CD-Order-Processing">
+
+        <description>
+            This flow processes users CD library XML files exported from myTunes, giving them a quote
+            to purchase the CD's
+        </description>
+
+        <file:inbound-endpoint path="/private/tmp/MULE">
+            <file:filename-wildcard-filter pattern="*.xml" />
+            <file:file-to-string-transformer />
+        </file:inbound-endpoint>
+
+        <add-variable key="totalPrice" value="#[0.0]" />
+
+        <logger level="ERROR"
+            message="CD Catalog Recieved at #[now()] (milliseconds: #[sys.currentTimeMillis()]), file size is #[message.inboundProperties['fileSize']/1024] Kb" />
+
+        <foreach collection="xpath('catalog/cd')">
+            <logger level="ERROR" message="CD:  #[xpath('title').textContent] - #[xpath('artist').textContent]" />
+            <flow-ref name="updateStockStatus" />
+            <choice>
+                <!-- Only check for discounts in the UK -->
+                <when expression="#[server.locale.country == 'US' || server.locale.country == 'CA']">
+                    <flow-ref name="applyUKDiscount" />
+                </when>
+                <otherwise>
+                    <add-variable key="totalPrice" value="#[totalPrice + (double) xpath('price').textContent]" />
+                </otherwise>
+            </choice>
+            <add-variable key="numCDs" value="#[counter]" />
+        </foreach>
+
+        <logger level="ERROR" message="Total price for #[counter] CDs is #[formatPrice(totalPrice)] - ( with tax #[formatPrice(addTax(totalPrice))] )" />
+        <file:outbound-endpoint path="/private/tmp/OUT" />
+
+    </flow>
+
+    <!-- Sub Flows -->
+
+    <sub-flow name="applyUKDiscount">
+        <enricher target="flowVars['discount']">
+            <flow-ref name="UKDiscountService" />
+        </enricher>
+        <choice>
+            <when expression="#[discount > 0]">
+                <add-variable key="discountedPrice" value="#[xpath('price').textContent * (1-discount)]" />
+                <eval expression="xpath('price').setTextContent(discountedPrice)" />
+                <add-variable key="totalPrice" value="#[totalPrice + (double) discountedPrice]" />
+            </when>
+            <otherwise>
+                <add-variable key="totalPrice" value="#[totalPrice + (double) xpath('price').textContent]" />
+            </otherwise> 
+        </choice>
+    </sub-flow>
+
+    <sub-flow name="updateStockStatus">
+        <enricher target="xpath('.').setAttribute('available', $)">
+            <flow-ref name="stockService" />
+        </enricher>
+    </sub-flow>
+
+    <!-- External Services -->
+
+    <sub-flow name="stockService">
+        <expression-transformer expression="#[randomBoolean()]" />
+    </sub-flow>
+
+    <sub-flow name="UKDiscountService">
+        <expression-transformer expression="#[randomDiscount()]" />
+    </sub-flow>
+
+</mule>
+
