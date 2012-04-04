@@ -1,10 +1,11 @@
-="http://www.mulesoft.org/schema/mule/core" xmlns:test="http://www.mulesoft.org/schema/mule/test"
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:test="http://www.mulesoft.org/schema/mule/test"
     xmlns:file="http://www.mulesoft.org/schema/mule/file" xmlns:mulexml="http://www.mulesoft.org/schema/mule/xml"
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
-                          http://www.mulesoft.org/schema/mule/test http://www.mulesoft.org/schema/mule/test/3.3/mule-test.xsd
-                          http://www.mulesoft.org/schema/mule/xml http://www.mulesoft.org/schema/mule/xml/3.3/mule-xml.xsd
-                          http://www.mulesoft.org/schema/mule/file http://www.mulesoft.org/schema/mule/file/3.3/mule-file.xsd">
+                          http://www.mulesoft.org/schema/mule/test http://www.mulesoft.org/schema/mule/test/current/mule-test.xsd
+                          http://www.mulesoft.org/schema/mule/xml http://www.mulesoft.org/schema/mule/xml/current/mule-xml.xsd
+                          http://www.mulesoft.org/schema/mule/file http://www.mulesoft.org/schema/mule/file/current/mule-file.xsd">
 
 
     <configuration>
@@ -49,7 +50,7 @@
             <file:file-to-string-transformer />
         </file:inbound-endpoint>
 
-        <add-variable key="totalPrice" value="#[0.0]" />
+        <set-variable variableName="totalPrice" value="#[0.0]" />
 
         <logger level="ERROR"
             message="CD Catalog Recieved at #[now()] (milliseconds: #[sys.currentTimeMillis()]), file size is #[message.inboundProperties['fileSize']/1024] Kb" />
@@ -63,13 +64,13 @@
                     <flow-ref name="applyUKDiscount" />
                 </when>
                 <otherwise>
-                    <add-variable key="totalPrice" value="#[totalPrice + (double) xpath('price').textContent]" />
+                    <set-variable variableName="totalPrice" value="#[totalPrice + (double) xpath('price').textContent]" />
                 </otherwise>
             </choice>
-            <add-variable key="numCDs" value="#[counter]" />
+            <set-variable variableName="numCDs" value="#[counter]" />
         </foreach>
 
-        <logger level="ERROR" message="Total price for #[counter] CDs is #[formatPrice(totalPrice)] - ( with tax #[formatPrice(addTax(totalPrice))] )" />
+        <logger level="ERROR" message="Total price for #[numCDs] CDs is #[formatPrice(totalPrice)] - ( with tax #[formatPrice(addTax(totalPrice))] )" />
         <file:outbound-endpoint path="/private/tmp/OUT" />
 
     </flow>
@@ -82,12 +83,12 @@
         </enricher>
         <choice>
             <when expression="#[discount > 0]">
-                <add-variable key="discountedPrice" value="#[xpath('price').textContent * (1-discount)]" />
-                <eval expression="xpath('price').setTextContent(discountedPrice)" />
-                <add-variable key="totalPrice" value="#[totalPrice + (double) discountedPrice]" />
+                <set-variable variableName="discountedPrice" value="#[xpath('price').textContent * (1-discount)]" />
+                <expression-component>xpath('price').setTextContent(discountedPrice)</expression-component>
+                <set-variable variableName="totalPrice" value="#[totalPrice + (double) discountedPrice]" />
             </when>
             <otherwise>
-                <add-variable key="totalPrice" value="#[totalPrice + (double) xpath('price').textContent]" />
+                <set-variable variableName="totalPrice" value="#[totalPrice + (double) xpath('price').textContent]" />
             </otherwise> 
         </choice>
     </sub-flow>

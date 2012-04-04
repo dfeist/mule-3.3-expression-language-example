@@ -9,7 +9,7 @@
     <name>Mule 3.3 RC1 Expression Language Example</name>
    
     <properties>    
-        <mule.version>3.0.0-RC1</mule.version>
+        <mule.version>3.3.0-RC1</mule.version>
     </properties>
 
     <dependencies>
